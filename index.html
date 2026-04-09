@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Claude Code 原価試算シミュレーター</title>
+  <style>
+    /* ── リセット・基本 ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', 'Hiragino Sans', 'Meiryo', sans-serif;
+      background: #0f1117;
+      color: #e0e0e0;
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+
+    /* ── ヘッダー ── */
+    .header {
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      border-bottom: 1px solid #2a2a4a;
+      padding: 24px 0;
+      text-align: center;
+    }
+    .header h1 {
+      font-size: 1.6rem;
+      color: #fff;
+      letter-spacing: 0.05em;
+    }
+    .header p {
+      color: #8888aa;
+      font-size: 0.85rem;
+      margin-top: 4px;
+    }
+
+    /* ── レイアウト ── */
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 24px 16px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+    @media (max-width: 768px) {
+      .grid { grid-template-columns: 1fr; }
+    }
+
+    /* ── カード ── */
+    .card {
+      background: #1a1b26;
+      border: 1px solid #2a2b3d;
+      border-radius: 12px;
+      padding: 20px;
+    }
+    .card-title {
+      font-size: 0.85rem;
+      color: #8888aa;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 16px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #2a2b3d;
+    }
+
+    /* ── フォーム要素 ── */
+    .form-group {
+      margin-bottom: 16px;
+    }
+    .form-group label {
+      display: block;
+      font-size: 0.85rem;
+      color: #aaa;
+      margin-bottom: 6px;
+    }
+    .form-group input[type="number"],
+    .form-group select {
+      width: 100%;
+      padding: 10px 12px;
+      background: #0f1117;
+      border: 1px solid #3a3b4d;
+      border-radius: 8px;
+      color: #fff;
+      font-size: 1rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .form-group input[type="number"]:focus,
+    .form-group select:focus {
+      border-color: #6366f1;
+    }
+    .form-group select option {
+      background: #1a1b26;
+    }
+
+    /* ── スライダー ── */
+    .slider-wrap {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .slider-wrap input[type="range"] {
+      flex: 1;
+      accent-color: #6366f1;
+      height: 6px;
+    }
+    .slider-val {
+      min-width: 80px;
+      text-align: right;
+      font-size: 1rem;
+      color: #fff;
+      font-weight: 600;
+    }
+
+    /* ── ラジオボタン（プラン選択） ── */
+    .plan-options {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .plan-option {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      background: #0f1117;
+      border: 1px solid #2a2b3d;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .plan-option:hover {
+      border-color: #4a4b6d;
+    }
+    .plan-option.active {
+      border-color: #6366f1;
+      background: #1e1f35;
+    }
+    .plan-option input[type="radio"] {
+      accent-color: #6366f1;
+    }
+    .plan-name {
+      font-weight: 600;
+      color: #fff;
+      font-size: 0.95rem;
+    }
+    .plan-price {
+      margin-left: auto;
+      color: #6366f1;
+      font-weight: 600;
+      font-size: 0.9rem;
+    }
+    .plan-desc {
+      font-size: 0.75rem;
+      color: #888;
+    }
+
+    /* ── 結果エリア ── */
+    .results-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .result-item {
+      background: #0f1117;
+      border: 1px solid #2a2b3d;
+      border-radius: 10px;
+      padding: 14px;
+      text-align: center;
+    }
+    .result-label {
+      font-size: 0.75rem;
+      color: #888;
+      margin-bottom: 4px;
+    }
+    .result-value {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: #fff;
+    }
+    .result-value.positive { color: #34d399; }
+    .result-value.negative { color: #f87171; }
+    .result-value.warning { color: #fbbf24; }
+    .result-sub {
+      font-size: 0.7rem;
+      color: #666;
+      margin-top: 2px;
+    }
+
+    /* ── 原価率バー ── */
+    .ratio-bar-wrap {
+      margin-top: 16px;
+    }
+    .ratio-bar-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.8rem;
+      margin-bottom: 6px;
+    }
+    .ratio-bar {
+      height: 12px;
+      background: #2a2b3d;
+      border-radius: 6px;
+      overflow: hidden;
+      position: relative;
+    }
+    .ratio-bar-fill {
+      height: 100%;
+      border-radius: 6px;
+      transition: width 0.4s ease, background 0.4s ease;
+    }
+
+    /* ── フル幅カード ── */
+    .full-width {
+      grid-column: 1 / -1;
+    }
+
+    /* ── テーブル ── */
+    .sim-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+    }
+    .sim-table th {
+      text-align: left;
+      padding: 8px 10px;
+      color: #888;
+      font-weight: 500;
+      border-bottom: 1px solid #2a2b3d;
+      font-size: 0.75rem;
+    }
+    .sim-table td {
+      padding: 8px 10px;
+      border-bottom: 1px solid #1a1b2d;
+    }
+    .sim-table tr:hover td {
+      background: #1e1f30;
+    }
+    .sim-table .num {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* ── 備考 ── */
+    .note {
+      font-size: 0.75rem;
+      color: #666;
+      margin-top: 12px;
+      line-height: 1.5;
+    }
+
+    /* ── アカウント数入力 ── */
+    .accounts-wrap {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ヘッダー -->
+<div class="header">
+  <h1>Claude Code 原価試算シミュレーター</h1>
+  <p>HP制作ビジネスの原価・利益をリアルタイムで試算</p>
+</div>
+
+<div class="container">
+  <div class="grid">
+
+    <!-- 左: 入力パネル -->
+    <div>
+      <!-- プラン選択 -->
+      <div class="card" style="margin-bottom: 20px;">
+        <div class="card-title">1. プラン選択</div>
+        <div class="plan-options" id="planOptions">
+          <label class="plan-option active" data-plan="max5x">
+            <input type="radio" name="plan" value="max5x" checked>
+            <div>
+              <div class="plan-name">Max 5x</div>
+              <div class="plan-desc">個人 / 月630万トークン</div>
+            </div>
+            <div class="plan-price">$100/月</div>
+          </label>
+          <label class="plan-option" data-plan="max20x">
+            <input type="radio" name="plan" value="max20x">
+            <div>
+              <div class="plan-name">Max 20x</div>
+              <div class="plan-desc">個人 / 月2,520万トークン</div>
+            </div>
+            <div class="plan-price">$200/月</div>
+          </label>
+          <label class="plan-option" data-plan="pro">
+            <input type="radio" name="plan" value="pro">
+            <div>
+              <div class="plan-name">Pro</div>
+              <div class="plan-desc">個人 / 月126万トークン</div>
+            </div>
+            <div class="plan-price">$20/月</div>
+          </label>
+          <label class="plan-option" data-plan="team_std">
+            <input type="radio" name="plan" value="team_std">
+            <div>
+              <div class="plan-name">Team Standard</div>
+              <div class="plan-desc">チーム / 最低5席 / 1席あたり月390万トークン</div>
+            </div>
+            <div class="plan-price">$30/席/月</div>
+          </label>
+          <label class="plan-option" data-plan="team_prm">
+            <input type="radio" name="plan" value="team_prm">
+            <div>
+              <div class="plan-name">Team Premium</div>
+              <div class="plan-desc">チーム / 最低5席 / 1席あたり月1,970万トークン</div>
+            </div>
+            <div class="plan-price">$150/席/月</div>
+          </label>
+        </div>
+
+        <!-- アカウント数 / 席数 -->
+        <div class="form-group accounts-wrap" style="margin-top: 16px;">
+          <label id="seatsLabel">アカウント数</label>
+          <input type="number" id="seats" value="1" min="1" max="100" step="1">
+          <p class="note" id="seatsNote" style="margin-top: 4px;">※ 同じプランを複数契約する場合の数</p>
+        </div>
+      </div>
+
+      <!-- 制作・価格設定 -->
+      <div class="card">
+        <div class="card-title">2. 制作・価格設定</div>
+
+        <div class="form-group">
+          <label>1サイトの売値（税抜）</label>
+          <div class="slider-wrap">
+            <input type="range" id="price" min="10000" max="1000000" step="10000" value="200000">
+            <span class="slider-val" id="priceVal">200,000円</span>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>月間制作本数</label>
+          <div class="slider-wrap">
+            <input type="range" id="volume" min="1" max="30" step="1" value="4">
+            <span class="slider-val" id="volumeVal">4本</span>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>1サイトあたりのトークン消費（万トークン）</label>
+          <div class="slider-wrap">
+            <input type="range" id="tokenPerSite" min="50" max="500" step="10" value="150">
+            <span class="slider-val" id="tokenPerSiteVal">150万</span>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>為替レート（1ドル = ○円）</label>
+          <div class="slider-wrap">
+            <input type="range" id="rate" min="100" max="200" step="1" value="150">
+            <span class="slider-val" id="rateVal">150円</span>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>その他経費（月額 / ドメイン・サーバー・素材など）</label>
+          <input type="number" id="otherCost" value="0" min="0" step="1000">
+        </div>
+      </div>
+    </div>
+
+    <!-- 右: 結果パネル -->
+    <div>
+      <!-- メイン結果 -->
+      <div class="card" style="margin-bottom: 20px;">
+        <div class="card-title">試算結果</div>
+        <div class="results-grid">
+          <div class="result-item">
+            <div class="result-label">月額コスト（Claude Code）</div>
+            <div class="result-value" id="resMonthlyCost">—</div>
+            <div class="result-sub" id="resMonthlyCostUsd">—</div>
+          </div>
+          <div class="result-item">
+            <div class="result-label">月間売上</div>
+            <div class="result-value" id="resRevenue">—</div>
+          </div>
+          <div class="result-item">
+            <div class="result-label">1本あたり原価</div>
+            <div class="result-value" id="resCostPerSite">—</div>
+            <div class="result-sub" id="resCostPerSiteNote">—</div>
+          </div>
+          <div class="result-item">
+            <div class="result-label">月間粗利</div>
+            <div class="result-value" id="resProfit">—</div>
+          </div>
+        </div>
+
+        <!-- 原価率バー -->
+        <div class="ratio-bar-wrap">
+          <div class="ratio-bar-label">
+            <span>原価率（Claude Code + 経費）</span>
+            <span id="resRatioText">—</span>
+          </div>
+          <div class="ratio-bar">
+            <div class="ratio-bar-fill" id="resRatioBar" style="width: 0%;"></div>
+          </div>
+        </div>
+
+        <!-- 粗利率 -->
+        <div class="ratio-bar-wrap" style="margin-top: 12px;">
+          <div class="ratio-bar-label">
+            <span>粗利率</span>
+            <span id="resProfitRatioText">—</span>
+          </div>
+          <div class="ratio-bar">
+            <div class="ratio-bar-fill" id="resProfitRatioBar" style="width: 0%;"></div>
+          </div>
+        </div>
+
+        <p class="note">※ 人件費は含んでいません</p>
+      </div>
+
+      <!-- トークン消費チェック -->
+      <div class="card" style="margin-bottom: 20px;">
+        <div class="card-title">トークン消費チェック</div>
+        <div class="results-grid">
+          <div class="result-item">
+            <div class="result-label">月間必要トークン</div>
+            <div class="result-value" id="resTokenNeed">—</div>
+          </div>
+          <div class="result-item">
+            <div class="result-label">プラン上限</div>
+            <div class="result-value" id="resTokenCap">—</div>
+          </div>
+        </div>
+        <div class="ratio-bar-wrap" style="margin-top: 12px;">
+          <div class="ratio-bar-label">
+            <span>トークン使用率</span>
+            <span id="resTokenRatioText">—</span>
+          </div>
+          <div class="ratio-bar">
+            <div class="ratio-bar-fill" id="resTokenRatioBar" style="width: 0%;"></div>
+          </div>
+        </div>
+        <p class="note" id="tokenWarning" style="color: #f87171; display: none;">
+          ⚠ プランのトークン上限を超えています。プランのアップグレードまたは制作本数の削減を検討してください。
+        </p>
+      </div>
+
+      <!-- スケール比較表 -->
+      <div class="card">
+        <div class="card-title">本数別シミュレーション</div>
+        <table class="sim-table">
+          <thead>
+            <tr>
+              <th>月間本数</th>
+              <th class="num">売上</th>
+              <th class="num">1本原価</th>
+              <th class="num">粗利</th>
+              <th class="num">原価率</th>
+            </tr>
+          </thead>
+          <tbody id="simTableBody"></tbody>
+        </table>
+        <p class="note">※ 現在選択中のプラン・売値・為替レートで計算</p>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  // プラン定義
+  const PLANS = {
+    pro:       { usd: 20,  isTeam: false, minSeats: 1, monthlyTokens: 1260000 },
+    max5x:     { usd: 100, isTeam: false, minSeats: 1, monthlyTokens: 6300000 },
+    max20x:    { usd: 200, isTeam: false, minSeats: 1, monthlyTokens: 25200000 },
+    team_std:  { usd: 30,  isTeam: true,  minSeats: 5, monthlyTokens: 3900000 },  // 1席あたり
+    team_prm:  { usd: 150, isTeam: true,  minSeats: 5, monthlyTokens: 19700000 }, // 1席あたり
+  };
+
+  // DOM要素
+  const els = {
+    price: document.getElementById('price'),
+    priceVal: document.getElementById('priceVal'),
+    volume: document.getElementById('volume'),
+    volumeVal: document.getElementById('volumeVal'),
+    tokenPerSite: document.getElementById('tokenPerSite'),
+    tokenPerSiteVal: document.getElementById('tokenPerSiteVal'),
+    rate: document.getElementById('rate'),
+    rateVal: document.getElementById('rateVal'),
+    otherCost: document.getElementById('otherCost'),
+    seats: document.getElementById('seats'),
+    seatsLabel: document.getElementById('seatsLabel'),
+    seatsNote: document.getElementById('seatsNote'),
+  };
+
+  // 数値フォーマット
+  function fmt(n) {
+    return Math.round(n).toLocaleString('ja-JP');
+  }
+
+  // 現在のプラン取得
+  function getSelectedPlan() {
+    return document.querySelector('input[name="plan"]:checked').value;
+  }
+
+  // 計算＆表示
+  function calc() {
+    const planKey = getSelectedPlan();
+    const plan = PLANS[planKey];
+    const rate = parseInt(els.rate.value);
+    const pricePerSite = parseInt(els.price.value);
+    const volume = parseInt(els.volume.value);
+    const tokenPerSite = parseInt(els.tokenPerSite.value) * 10000; // 万トークン→トークン
+    const otherCost = parseInt(els.otherCost.value) || 0;
+    const minSeats = plan.minSeats;
+    const seats = Math.max(minSeats, parseInt(els.seats.value) || minSeats);
+
+    // アカウント数ラベルの切り替え
+    if (plan.isTeam) {
+      els.seatsLabel.textContent = '席数（最低' + minSeats + '席）';
+      els.seatsNote.textContent = '※ チームプランは最低' + minSeats + '席から';
+      els.seats.min = minSeats;
+    } else {
+      els.seatsLabel.textContent = 'アカウント数';
+      els.seatsNote.textContent = '※ 同じプランを複数契約する場合の数';
+      els.seats.min = 1;
+    }
+
+    // スライダー値の表示更新
+    els.priceVal.textContent = fmt(pricePerSite) + '円';
+    els.volumeVal.textContent = volume + '本';
+    els.tokenPerSiteVal.textContent = (parseInt(els.tokenPerSite.value)) + '万';
+    els.rateVal.textContent = rate + '円';
+
+    // 月額コスト（円）— 個人プランでも複数アカウント対応
+    const monthlyUsd = plan.usd * seats;
+    const monthlyCostJpy = monthlyUsd * rate;
+    const totalMonthlyCost = monthlyCostJpy + otherCost;
+
+    // 1本あたり原価
+    const costPerSite = volume > 0 ? totalMonthlyCost / volume : 0;
+
+    // 月間売上
+    const revenue = pricePerSite * volume;
+
+    // 粗利
+    const profit = revenue - totalMonthlyCost;
+
+    // 原価率
+    const costRatio = revenue > 0 ? (totalMonthlyCost / revenue) * 100 : 0;
+    const profitRatio = revenue > 0 ? (profit / revenue) * 100 : 0;
+
+    // トークン
+    const tokenNeed = tokenPerSite * volume;
+    const tokenCap = plan.monthlyTokens * seats;
+    const tokenRatio = tokenCap > 0 ? (tokenNeed / tokenCap) * 100 : 0;
+
+    // ── 結果を反映 ──
+    document.getElementById('resMonthlyCost').textContent = fmt(totalMonthlyCost) + '円';
+    const unitLabel = plan.isTeam ? '席' : 'アカウント';
+    const seatsInfo = seats > 1 ? '（$' + fmt(plan.usd) + ' × ' + seats + unitLabel + '）' : '';
+    document.getElementById('resMonthlyCostUsd').textContent = '$' + fmt(monthlyUsd) + seatsInfo + (otherCost > 0 ? ' + 経費' + fmt(otherCost) + '円' : '');
+
+    document.getElementById('resRevenue').textContent = fmt(revenue) + '円';
+
+    const costPerSiteEl = document.getElementById('resCostPerSite');
+    costPerSiteEl.textContent = fmt(costPerSite) + '円';
+    document.getElementById('resCostPerSiteNote').textContent = 'Claude Code: ' + fmt(monthlyCostJpy / (volume || 1)) + '円' + (otherCost > 0 ? ' + 経費' : '');
+
+    const profitEl = document.getElementById('resProfit');
+    profitEl.textContent = fmt(profit) + '円';
+    profitEl.className = 'result-value ' + (profit > 0 ? 'positive' : 'negative');
+
+    // 原価率バー
+    const ratioText = document.getElementById('resRatioText');
+    ratioText.textContent = costRatio.toFixed(1) + '%';
+    const ratioBar = document.getElementById('resRatioBar');
+    ratioBar.style.width = Math.min(costRatio, 100) + '%';
+    ratioBar.style.background = costRatio <= 10 ? '#34d399' : costRatio <= 30 ? '#6366f1' : costRatio <= 50 ? '#fbbf24' : '#f87171';
+
+    // 粗利率バー
+    const profitRatioText = document.getElementById('resProfitRatioText');
+    profitRatioText.textContent = profitRatio.toFixed(1) + '%';
+    const profitRatioBar = document.getElementById('resProfitRatioBar');
+    profitRatioBar.style.width = Math.max(0, Math.min(profitRatio, 100)) + '%';
+    profitRatioBar.style.background = profitRatio >= 70 ? '#34d399' : profitRatio >= 50 ? '#6366f1' : profitRatio >= 0 ? '#fbbf24' : '#f87171';
+
+    // トークン
+    document.getElementById('resTokenNeed').textContent = fmt(tokenNeed / 10000) + '万';
+    document.getElementById('resTokenCap').textContent = fmt(tokenCap / 10000) + '万';
+    document.getElementById('resTokenRatioText').textContent = tokenRatio.toFixed(1) + '%';
+    const tokenBar = document.getElementById('resTokenRatioBar');
+    tokenBar.style.width = Math.min(tokenRatio, 100) + '%';
+    tokenBar.style.background = tokenRatio <= 60 ? '#34d399' : tokenRatio <= 90 ? '#fbbf24' : '#f87171';
+    document.getElementById('tokenWarning').style.display = tokenRatio > 100 ? 'block' : 'none';
+
+    // 本数別テーブル
+    const tbody = document.getElementById('simTableBody');
+    tbody.innerHTML = '';
+    const volumes = [1, 2, 3, 5, 8, 10, 15, 20];
+    for (const v of volumes) {
+      const rev = pricePerSite * v;
+      const cps = totalMonthlyCost / v;
+      const prf = rev - totalMonthlyCost;
+      const cr = (totalMonthlyCost / rev) * 100;
+      const needTk = tokenPerSite * v;
+      const overToken = needTk > tokenCap;
+
+      const tr = document.createElement('tr');
+      if (v === volume) tr.style.background = '#1e1f35';
+      tr.innerHTML = `
+        <td>${v}本${v === volume ? ' ◀' : ''}${overToken ? ' ⚠' : ''}</td>
+        <td class="num">${fmt(rev)}円</td>
+        <td class="num">${fmt(cps)}円</td>
+        <td class="num" style="color: ${prf >= 0 ? '#34d399' : '#f87171'}">${fmt(prf)}円</td>
+        <td class="num" style="color: ${cr <= 10 ? '#34d399' : cr <= 30 ? '#6366f1' : cr <= 50 ? '#fbbf24' : '#f87171'}">${cr.toFixed(1)}%</td>
+      `;
+      tbody.appendChild(tr);
+    }
+  }
+
+  // イベント登録
+  ['price', 'volume', 'tokenPerSite', 'rate'].forEach(id => {
+    document.getElementById(id).addEventListener('input', calc);
+  });
+  document.getElementById('otherCost').addEventListener('input', calc);
+  document.getElementById('seats').addEventListener('input', calc);
+
+  // プラン選択
+  document.querySelectorAll('.plan-option').forEach(opt => {
+    opt.addEventListener('click', () => {
+      document.querySelectorAll('.plan-option').forEach(o => o.classList.remove('active'));
+      opt.classList.add('active');
+      calc();
+    });
+  });
+
+  // 初期計算
+  calc();
+</script>
+
+</body>
+</html>
